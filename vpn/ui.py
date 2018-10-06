@@ -4,6 +4,9 @@
 from tkinter import *
 from tkinter import ttk
 import command as cmd
+from connection import Message, Q
+import logging
+
 
 screen = {}
 
@@ -55,11 +58,20 @@ def run():
 def continueClick():
     # TODO: currently using shared secret as input and this click is used to listen as server
     print("sharedSecret: {}".format(screen["sharedSecret"].get()))
-    s = cmd.ServerListenCommand()
-    s.execute()
+    screen["sharedSecret"].set("stuff")
+    try:
+        msg = Message(Message.SEND, "hey!")
+        Q.put_nowait(msg)
+    except:
+        import traceback
+        tb = traceback.format_exc()
+        print (tb)
+        logging.error("Q is full!")
+    #s = cmd.ServerListenCommand()
+    #s.execute()
 
 def sendClick():
     # TODO: currently using this as a way to connect as client
     print("dataToSend: {}".format(screen["dataToSend"].get()))
-    c = cmd.ClientConnectCommand()
+    c = cmd.ClientConnectCommand("192.168.1.67", 8888)
     c.execute()

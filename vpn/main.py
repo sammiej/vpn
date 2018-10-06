@@ -11,7 +11,7 @@ def serverTest():
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
 
-    #ui.run()
     serverTest()
+    #ui.run()
     while True:
         pass
