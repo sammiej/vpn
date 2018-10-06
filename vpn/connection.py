@@ -1,3 +1,6 @@
+from queue import Queue
+
+q = Queue()
 
 """
 Decorator a connection object
@@ -16,6 +19,12 @@ class ConnectionWrapper(object):
         if not self.key:
             return self.conn.recv(size)
         raise NotImplementedError("Not implemented!")
+
+    def close(self):
+        self.conn.close()
     
     def setKey(self, key):
         self.key = key
+
+def getQueue():
+    return q

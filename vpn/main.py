@@ -1,18 +1,17 @@
 import key
 import logging
-import _thread
-from threading import Condition
 import socket
-from command import ServerListenCommand, ClientConnectCommand
+import command as cmd
+#import ui
 
-def serverThread():
-    s = ServerListenCommand(cv)
+def serverTest():
+    s = cmd.ServerListenCommand()
     s.execute()
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
 
-    serverThread()
-
+    #ui.run()
+    serverTest()
     while True:
         pass

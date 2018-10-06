@@ -1,7 +1,9 @@
 import socket
 import logging
-import _thread
+from threading import Thread
 from connection import ConnectionWrapper
+from key import KeyExchanger
+from auth import Authenticator
 
 NUM_CLIENTS = 1
 
@@ -23,26 +25,33 @@ class ServerListenCommand(Command):
         self.auth = Authenticator()
 
     def execute(self):    
-        s = socket.socket()
+        self.sock = socket.socket()
         logging.info("Server socket created")
         try:
-            s.bind((self.host, self.port))
+            self.sock.bind((self.host, self.port))
         except socket.error as msg:
             logging.error("Server socket bind failed")
-            s.close()
+            self.sock.close()
             return
         logging.info("Server socket bind complete")
+        t = Thread(target=self.listenThread)
+        t.start()
 
-        s.listen(NUM_CLIENTS)
+    def listenThread(self):
+        logging.info("Listening for connection on separate thread")
+        self.sock.listen(NUM_CLIENTS)
 
-        try:            
-            conn, addr = s.accept()
-            logging.info("Connected with {} : {}".format(addr[0], addr[1]))
-            self.handleClientThread(conn)
+        try:
+            while True:            
+                conn, addr = self.sock.accept()
+                logging.info("Connected with {} : {}".format(addr[0], addr[1]))
+                self.handleClient(conn)
         except:
-            s.close()
+            logging.info("Connection to client closed unexpectedly")
+            self.sock.close()
 
-    def handleClientThread(self, conn):
+
+    def handleClient(self, conn):
         # TODO: change this
         conn = ConnectionWrapper(conn)
         self.kex.exchangeKey(conn)
@@ -54,8 +63,9 @@ class ServerListenCommand(Command):
                 if not data:
                     break
                 print("obtained {}".format(data))
-                conn.send("received")
+                conn.send("received".encode())
         finally:
+            logging.info("Connection to client closed")
             conn.close()
         
 
@@ -67,19 +77,24 @@ class ClientConnectCommand(Command):
         self.auth = Authenticator()
         
     def execute(self):
-        c = socket.socket()
+        self.sock = socket.socket()
         logging.info("Client socket created")
+        t = Thread(target=self.connectThread)
+        t.start()
+
+    def connectThread(self):
         try:
-            c.connect((self.host, self.port))
+            self.sock.connect((self.host, self.port))
             logging.info("Client connected")
-            conn = ConnectionWrapper(c)
+            conn = ConnectionWrapper(self.sock)
             self.kex.exchangeKey(conn)
             self.auth.authenticate()
             while True:
+                
                 # TODO: talk to server here
                 pass
         finally:
-            c.close()
-        
+            logging.info("Connection to server closed")
+            conn.close()        
         
         
