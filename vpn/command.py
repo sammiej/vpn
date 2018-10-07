@@ -3,7 +3,7 @@ import logging
 from threading import Thread
 from connection import ConnectionWrapper, Q, MQ, Message, UMessage
 from key import KeyExchanger
-from auth import Authenticator
+from auth import Authenticator, AuthError
 from queue import Empty, Full
 
 NUM_CLIENTS = 1
@@ -23,7 +23,8 @@ class ServerListenCommand(Command):
         self.host = "0.0.0.0"
         self.port = 8888
         self.kex = KeyExchanger()
-        self.auth = Authenticator()
+        # TODO: get shared secret from input
+        self.auth = Authenticator(Authenticator.sharedSecret)
 
     def execute(self):    
         self.sock = socket.socket()
@@ -53,29 +54,30 @@ class ServerListenCommand(Command):
             self.sock.close()
 
     def handleClient(self, conn):
-        # TODO: change this
-        conn = ConnectionWrapper(conn)
-        self.kex.exchangeKey(conn)
-        self.auth.authenticate()
-        # TODO: start talking here
         try:
+            conn = ConnectionWrapper(conn)
+            self.kex.exchangeKey(conn)
+            self.auth.authenticate(conn)
             while True:
+                # TODO: Change this
                 data = conn.recv(1024)
                 if not data:
                     break
-                print("obtained {}".format(data))
+                logging.info("obtained {}".format(data))
                 conn.send("received".encode())
+        except AuthError as err:
+            logging.info(str(err))
         finally:
             logging.info("Connection to client closed")
             conn.close()
-        
 
 class ClientConnectCommand(Command):
     def __init__(self, host, port):
         self.host = host
         self.port = port
         self.kex = KeyExchanger()
-        self.auth = Authenticator()
+        # TODO: get shared secret from input
+        self.auth = Authenticator(Authenticator.sharedSecret)
         
     def execute(self):
         self.sock = socket.socket()
@@ -91,7 +93,7 @@ class ClientConnectCommand(Command):
             conn = ConnectionWrapper(self.sock)
             # use connection from now on to talk
             self.kex.exchangeKey(conn)
-            self.auth.authenticate()
+            self.auth.authenticate(conn)
             # From here on only use conn to send and recv messages
             self.sock.settimeout(0.2)                                
             while True:
@@ -108,14 +110,15 @@ class ClientConnectCommand(Command):
                     data = conn.recv(1024)
                     if not data:
                         break
-                    print("data: {}".format(data))
+                    logging.info("data: {}".format(data))
                     umsg = UMessage(UMessage.DISPLAY, data.decode())
                     MQ.put_nowait(umsg)
                 except socket.timeout:
                     pass
                 except Full:
                     logging.error("Main queue is full!")
-                # TODO: talk to server here
+        except AuthError as err:
+            logging.info(str(err))
         finally:
             logging.info("Connection to server closed")
             if conn:
