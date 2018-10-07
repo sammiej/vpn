@@ -2,7 +2,7 @@ import key
 import logging
 import socket
 import command as cmd
-#import ui
+import ui
 
 def serverTest():
     s = cmd.ServerListenCommand()
@@ -11,7 +11,7 @@ def serverTest():
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
 
-    serverTest()
-    #ui.run()
+    #serverTest()
+    ui.run()
     while True:
         pass

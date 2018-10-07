@@ -1,10 +1,10 @@
 import socket
 import logging
 from threading import Thread
-from connection import ConnectionWrapper, Q, Message
+from connection import ConnectionWrapper, Q, MQ, Message, UMessage
 from key import KeyExchanger
 from auth import Authenticator
-from queue import Empty
+from queue import Empty, Full
 
 NUM_CLIENTS = 1
 
@@ -109,8 +109,12 @@ class ClientConnectCommand(Command):
                     if not data:
                         break
                     print("data: {}".format(data))
+                    umsg = UMessage(UMessage.DISPLAY, data.decode())
+                    MQ.put_nowait(umsg)
                 except socket.timeout:
                     pass
+                except Full:
+                    logging.error("Main queue is full!")
                 # TODO: talk to server here
         finally:
             logging.info("Connection to server closed")

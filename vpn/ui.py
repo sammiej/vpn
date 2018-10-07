@@ -4,8 +4,9 @@
 from tkinter import *
 from tkinter import ttk
 import command as cmd
-from connection import Message, Q
+from connection import Message, UMessage, Q, MQ
 import logging
+from queue import Empty
 
 
 screen = {}
@@ -53,6 +54,21 @@ def run():
     #padding
     for child in mainframe.winfo_children(): child.grid_configure(padx=5, pady=5)
 
+    def lloop():
+        try:
+            umsg = MQ.get(timeout=0.2)
+            if umsg is None:
+                # TODO: quit application here?
+                pass
+            if umsg.mtype == UMessage.DISPLAY:
+                screen["sharedSecret"].set(umsg.text)
+            MQ.task_done()
+        except Empty:
+            pass
+        root.after(200, lloop)
+        
+    # Listen for events periodically    
+    lloop()
     root.mainloop()
 
 def continueClick():
