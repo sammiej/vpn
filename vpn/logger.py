@@ -22,8 +22,3 @@ def log_decorator(log):
     return wrapper
 
 logger.info = log_decorator(logger.info)
-
-def attachScreen(s):
-    screen = s
-
-logger.attachScreen = attachScreen

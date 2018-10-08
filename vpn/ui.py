@@ -104,8 +104,6 @@ def run():
 
     # Listen for events periodically
     lloop()
-
-    logger.attachScreen(screen)
     root.mainloop()
 
 
