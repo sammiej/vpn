@@ -1,6 +1,7 @@
 import logging
 from tkinter import END
 from util import UMessage, MQ
+from queue import Full
 import datetime
 
 screen = None

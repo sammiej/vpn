@@ -6,7 +6,7 @@ from tkinter import ttk
 import command as cmd
 from util import Message, UMessage, Q, MQ
 from logger import logger
-from queue import Empty
+from queue import Empty, Full
 
 screen = {}
 
@@ -26,6 +26,7 @@ def run():
     dataToSend = StringVar()
     screen["dataToSend"] = dataToSend
     dataReceived = StringVar()
+    screen["dataReceived"] = dataReceived
 
     portEntry = ttk.Entry(mainframe, width=7, textvariable=port)    
     sharedSecretEntry = ttk.Entry(mainframe, width=7, textvariable=sharedSecret)
@@ -84,7 +85,7 @@ def run():
     clientToggle.invoke()
 
     # buttons
-    ttk.Button(mainframe, text="Send").grid(column=3, row=5, sticky=W)
+    ttk.Button(mainframe, text="Send", command=sendClick).grid(column=3, row=5, sticky=W)
 
     #padding
     for child in mainframe.winfo_children(): child.grid_configure(padx=5, pady=5)
@@ -97,6 +98,8 @@ def run():
                 pass
             if umsg.mtype == UMessage.DISPLAY:
                 screen["listbox"].insert(END, umsg.text)
+            if umsg.mtype == UMessage.RECEIVE:
+                screen["dataReceived"].set(umsg.text)
             MQ.task_done()
         except Empty:
             pass
@@ -112,19 +115,36 @@ def continueClick():
     pass
 
 def sendClick():
-    # TODO: currently using this as a way to connect as client
-    pass
+    data = screen["dataToSend"].get()
+    if data:
+        screen["dataToSend"].set("")
+        logger.info("sending: {}".format(data))
+        try:
+            msg = Message(Message.SEND, data)
+            Q.put_nowait(msg)
+        except Full:
+            logger.error("Network queue is full!")
 
 def connectClick():
-    port = int(screen["port"].get())
+    port = screen["port"].get()
     ip = screen["ip"].get()
+    if not port:
+        port = 8888
+    else:
+        port = int(port)
+    if not ip:
+        ip = "127.0.0.1"
     sharedSecret = screen["sharedSecret"].get()
     logger.debug("selected ip: {}, port: {}".format(ip, port))
     c = cmd.ClientConnectCommand(ip, port, sharedSecret)
     c.execute()
 
 def listenClick():
-    port = int(screen["port"].get())
+    port = screen["port"].get()
+    if not port:
+        port = 8888
+    else:
+        port = int(port)
     sharedSecret = screen["sharedSecret"].get()
     logger.debug("port selected: {}".format(port))
     s = cmd.ServerListenCommand(port, sharedSecret)

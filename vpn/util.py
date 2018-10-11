@@ -16,7 +16,8 @@ class Message(object):
 Message that is placed on the main queue to be consumed by the main thread
 """
 class UMessage(object):
-    DISPLAY = 0 # display message in shared secret slot? testing
+    DISPLAY = 0 # display in log
+    RECEIVE = 1 # display in received
     def __init__(self, mtype, text):
         self.mtype = mtype
         self.text = text

@@ -6,6 +6,7 @@ from util import Q, MQ, Message, UMessage
 from key import KeyExchanger
 from auth import Authenticator, AuthError
 from queue import Empty, Full
+from cryptography.exceptions import InvalidSignature
 
 NUM_CLIENTS = 1
 
@@ -24,7 +25,6 @@ class ServerListenCommand(Command):
         self.host = "0.0.0.0"
         self.port = port
         self.kex = KeyExchanger()
-        # TODO: get shared secret from input
         self.auth = Authenticator(sharedSecret)
 
     def execute(self):    
@@ -59,18 +59,37 @@ class ServerListenCommand(Command):
             conn = ConnectionWrapper(conn)
             self.kex.exchangeKey(conn)
             self.auth.authenticate(conn)
+            t = Thread(target=self.packetListener, args=(conn,))
+            t.start()
             while True:
-                # TODO: Change this
-                data = conn.recv(1024)
-                if not data:
-                    break
-                logger.info("obtained {}".format(data))
-                conn.send("received".encode())
+                try:
+                    msg = Q.get(timeout=0.2)
+                    if not msg:
+                        break
+                    if msg.mtype == Message.SEND:
+                        conn.send(msg.bytes)
+                        Q.task_done()
+                except Empty:
+                    pass
         except AuthError as err:
             logger.info(str(err))
         finally:
             logger.info("Connection to client closed")
             conn.close()
+
+    def packetListener(self, conn):
+        while True:
+            try:
+                data = conn.recv()
+                if not data:
+                    break
+                logger.info("data: {}".format(data))
+                umsg = UMessage(UMessage.RECEIVE, data)
+                MQ.put_nowait(umsg)
+            except Full:
+                pass                
+            except InvalidSignature:
+                logger.info("Invalid signiture data is tampered with!")
 
 class ClientConnectCommand(Command):
     def __init__(self, host, port, sharedSecret):
@@ -94,30 +113,35 @@ class ClientConnectCommand(Command):
             # use connection from now on to talk
             self.kex.exchangeKey(conn)
             self.auth.authenticate(conn)
-            # From here on only use conn to send and recv messages
-            self.sock.settimeout(0.2)                                
+            t = Thread(target=self.packetListener, args=(conn,))
+            t.start()
             while True:
                 try:
                     msg = Q.get(timeout=0.2)
-                    if msg is None:
+                    if not msg:
                         break
                     if msg.mtype == Message.SEND:
                         conn.send(msg.bytes)
                     Q.task_done()
                 except Empty:
                     pass
-                try:
-                    data = conn.recv(1024)
-                    if not data:
-                        break
-                    logger.info("data: {}".format(data))
-                except socket.timeout:
-                    pass
         except AuthError as err:
             logger.info(str(err))
         finally:
             logger.info("Connection to server closed")
             if conn:
-                conn.close()        
+                conn.close()   
         
-        
+    def packetListener(self, conn):
+        while True:
+            try:
+                data = conn.recv()
+                if not data:
+                    break
+                logger.info("data: {}".format(data))
+                umsg = UMessage(UMessage.RECEIVE, data)
+                MQ.put_nowait(umsg)
+            except Full:
+                pass
+            except InvalidSignature:
+                logger.info("Invalid signiture data is tampered with!")

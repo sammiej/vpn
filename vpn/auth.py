@@ -55,7 +55,7 @@ class Authenticator(object):
         self.authenticateSend()
 
         logger.info("Trying to receive auth data")
-        data = self.conn.recv(1024)
+        data = self.conn.recv(asBytes=True)
         logger.info("Auth data received!")
         logger.debug("Auth data: {}".format(data))
         if len(data) == len(Authenticator.authMagic) + Authenticator.hashSize + Authenticator.N:
