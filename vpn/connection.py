@@ -9,10 +9,10 @@ Decorator a connection object
 class ConnectionWrapper(object):
     def __init__(self, conn):
         self.conn = conn
-        self.hashSize = 256 / 8
-        self.sessionKey = None
-        #self.sessionkey = b'j\xefp\x8a=z/\x11"\x11+\x9dwj\x08*\xf3\xb6\x1b \x9f\xab\x11Y\x1c\xe3&\x9b\x0f\x8dG\t' # test value
-        self.blockSize = 128 / 8
+        self.hashSize = int(256 / 8)
+        #self.sessionKey = None
+        self.sessionKey = b'j\xefp\x8a=z/\x11"\x11+\x9dwj\x08*\xf3\xb6\x1b \x9f\xab\x11Y\x1c\xe3&\x9b\x0f\x8dG\t' # test value
+        self.blockSize = int(128 / 8)
         
     def send(self, data):
         header = Header()
@@ -22,12 +22,13 @@ class ConnectionWrapper(object):
         header.setSize(len(data))
         msg = header.getBytes() + data
 
-        logger.debug("msg: " + str(msg))
+        logger.debug("msg: {}, len: {}".format(msg, len(msg)))
         if not self.sessionKey:
             self.conn.send(msg)
             return
 
-        (data, paddingSize) = self.applyPadding(data)
+        (data, paddingSize) = self._applyPadding(header, data)
+        logger.debug("data: " + str(data))
         header.setPaddingSize(paddingSize)
         msg = header.getBytes() + data
         iv = os.urandom(self.blockSize)
@@ -44,39 +45,43 @@ class ConnectionWrapper(object):
     """
     Apply insecure padding of all zeros
     Params:
+      header: the header of the packet
       msg: bytes
     Post-Condition:
       returns the padded msg and the padding size as a tuple
     """
-    def applyPadding(msg):
-        leftover = len(msg) % self.blockSize
+    def _applyPadding(self, header, msg):
+        totalLen = len(msg) + header.getHeaderSize()
+        leftover = totalLen % self.blockSize
         if leftover != 0:
             paddingSize = self.blockSize - leftover
-            msg += paddingSize * "0".encode();
+            msg += (paddingSize * "0").encode()
         else:
             paddingSize = 0
         return (msg, paddingSize)
-        
+
     """
-    Receives the next protocol packet.
-    Params:
-      asBytes: if true return result as bytes, string otherwise.
+    Post-Condition:
+      returns tuple containing headerBytes and state, state is None
+      if header is fully extracted
     """
-    def recv(self, asBytes=False):
-        if self.sessionKey:
-            iv = "".encode()
-            while len(iv) < self.blockSize:
-                iv += self.conn.recv(self.blockSize - len(iv))
-                
+    def _recvHeaderBytes(self, state=None, generator=None):        
         headerBytes = b''
         Normal = 0
         FirstNL = 1
         FirstCR = 2
         SecondNL = 3
         SecondCR = 4
-        state = Normal
+        if not state:
+            state = Normal
         while True:
-            char = self.conn.recv(1)
+            if not generator:
+                char = self.conn.recv(1)
+            else:
+                try:
+                    char = next(generator)
+                except StopIteration:
+                    break
             headerBytes += char
             if char == b'\n':
                 if state == Normal:
@@ -92,39 +97,84 @@ class ConnectionWrapper(object):
                 if state == FirstCR:
                     state = Normal
             if state == SecondCR:
+                state = None
                 break
+        return (headerBytes, state)
 
-        header = Header()
-        body = header.update(headerBytes)
+    def _recvBytes(self, size):
+        block = b''
+        while len(block) < size:
+            block += self.conn.recv(size - len(block))
+        return block
+
+    def _blkGenerator(self, blk):
+        for b in blk:
+            yield bytes([b & 0xff])
+    
+    """
+    Receives the next protocol packet.
+    Params:
+      asBytes: if true return result as bytes, string otherwise.
+    """
+    def recv(self, asBytes=False):
+        if self.sessionKey:
+            iv = self._recvBytes(self.blockSize)
+            logger.debug("iv: {}".format(iv))
+            cipher = Cipher(algorithms.AES(self.sessionKey), modes.CBC(iv), backend=default_backend())
+            decryptor = cipher.decryptor()
+
+            ct = b''
+            blk = self._recvBytes(self.blockSize)
+            ct += blk
+            dblk = decryptor.update(blk)
+            gen = self._blkGenerator(dblk)            
+            headerBytes, state = self._recvHeaderBytes(generator=gen)
+            logger.debug("state: {}".format(state))
+            while state != None:
+                blk = self._recvBytes(self.blockSize)
+                ct += blk
+                dblk = decryptor.update(blk)
+                gen = self._blkGenerator(dblk)
+                temp, state = self._recvHeaderBytes(generator=gen)
+                headerBytes += temp
+
+            logger.debug("HeaderBytes: {}".format(headerBytes))
+            header = Header()
+            header.update(headerBytes)
+            body = b''
+            try:
+                while True:
+                    body += next(gen)
+            except StopIteration:
+                pass
+
+            leftoverBodySize = header.getSize() - len(body) + header.getPaddingSize()
+            leftoverBodyEncrypted = self._recvBytes(leftoverBodySize)
+            ct += leftoverBodyEncrypted
+            body += decryptor.update(leftoverBodyEncrypted) + decryptor.finalize()
             
-        if not body:
+            checkHmac = self._recvBytes(self.hashSize)
+            h = hmac.HMAC(self.sessionKey, hashes.SHA256(), backend=default_backend())
+            h.update(ct)
+            h.verify(checkHmac)
+
+            body = body[:len(body) - header.getPaddingSize()]
+            if not asBytes:
+                body = body.decode()
+            return body                  
+        else:
+            header = Header()
+            (headerBytes, _) = self._recvHeaderBytes()
+            header.update(headerBytes)
             body = b''
             
-        totalSize = header.getSize()
-        if self.sessionKey:
-            totalSize = header.getPaddingSize() + self.hashSize
-        while len(body) < totalSize:
-            body += self.conn.recv(int(totalSize - len(body)))
+            totalSize = header.getSize()
+            while len(body) < totalSize:
+                body += self.conn.recv(int(totalSize - len(body)))
             
-        if not self.sessionKey:
             if not asBytes:
                 return body.decode()
             return body
-            
-        checkHmac = body[-self.hashSize:]
-        ct = body[:len(body)-self.hashSize]
-        h = hmac.HMAC(self.sessionKey, hashes.SHA256(), backend=default_backend())
-        h.update(ct)
-        h.verify(checkHmac)
-
-        cipher = Cipher(algorithms.AES(self.sessionKey), modes.CBC(iv), backend=default_backend())
-        decryptor = cipher.decryptor()
-        msg = decryptor.update(ct) + decryptor.finalize()
-        msg = msg[:len(msg) - header.getPaddingSize()]
-        
-        if not asBytes:
-            msg = body.decode()
-        return msg
 
     def close(self):
         self.conn.close()
@@ -136,6 +186,7 @@ class ConnectionWrapper(object):
         self.sessionKey = key
 
     def getKey(self):
+        # TODO: Change this to session key
         return b'j\xefp\x8a=z/\x11"\x11+\x9dwj\x08*\xf3\xb6\x1b \x9f\xab\x11Y\x1c\xe3&\x9b\x0f\x8dG\t'        
         #return self.sessionKey
 
@@ -154,10 +205,19 @@ class Header(object):
         self.size = 0
         self.paddingSize = 0
         self.completed = False
-    
+
+    """
+    Get the number of bytes that header takes up in packet
+    """
+    def getHeaderSize(self):
+        return len(self.getBytes())
+        
     def setSize(self, size):
         self.size = size
 
+    """
+    Get the payload size of this header
+    """
     def getSize(self):
         return self.size
 
