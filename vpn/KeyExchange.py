@@ -9,11 +9,11 @@ from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.primitives.serialization import load_der_private_key
 from cryptography.hazmat.primitives.serialization import load_der_public_key
 
-#------------------------------------------
+#------------------------------------------------------------------------------
 # Diffie-Hellman key exchange parameters class:
 #
 #   Parameters class generates shared prime number and primitive root
-#------------------------------------------
+#------------------------------------------------------------------------------
 class KeyExchangeParameters:
     
     def __init__(self):
