@@ -112,7 +112,7 @@ class ConnectionWrapper(object):
             yield bytes([b & 0xff])
     
     """
-    Receives the next protocol packet.
+    Receives the next protocol packet, this function blocks till a packet is received.
     Params:
       asBytes: if true return result as bytes, string otherwise.
     """
@@ -246,9 +246,6 @@ class Header(object):
     """
     def update(self, buf):
         headerStr = buf[:-len(Header.cr)].decode()
-        self._extractHeaderValues(headerStr)
-
-    def _extractHeaderValues(self, headerStr):
         headerStrMapArr = headerStr.split(Header.cr)
         self.size = int(headerStrMapArr[0].split(":")[1])
         self.paddingSize = int(headerStrMapArr[1].split(":")[1].strip())
