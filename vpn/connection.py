@@ -15,20 +15,20 @@ class ConnectionWrapper(object):
         self.blockSize = int(128 / 8)
         
     def send(self, data):
-        header = Header()
+        header = Header(self.blockSize)
         if isinstance(data, str):
             data = data.encode()
         
         header.setSize(len(data))
         msg = header.getBytes() + data
 
-        logger.debug("msg: {}, len: {}".format(msg, len(msg)))
+        logger.debug("msg before padding: {}, len: {}".format(msg, len(msg)))
         if not self.sessionKey:
             self.conn.send(msg)
             return
 
         (data, paddingSize) = self._applyPadding(header, data)
-        logger.debug("data: " + str(data))
+        logger.debug("data after padding: " + str(data))
         header.setPaddingSize(paddingSize)
         msg = header.getBytes() + data
         iv = os.urandom(self.blockSize)
@@ -139,7 +139,7 @@ class ConnectionWrapper(object):
                 headerBytes += temp
 
             logger.debug("HeaderBytes: {}".format(headerBytes))
-            header = Header()
+            header = Header(self.blockSize)
             header.update(headerBytes)
             body = b''
             try:
@@ -189,22 +189,20 @@ class ConnectionWrapper(object):
         # TODO: Change this to session key
         return b'j\xefp\x8a=z/\x11"\x11+\x9dwj\x08*\xf3\xb6\x1b \x9f\xab\x11Y\x1c\xe3&\x9b\x0f\x8dG\t'        
         #return self.sessionKey
-
-"""
-Handles receiving packets
-"""
-class Receiver(object):
-    pass
     
 class Header(object):
     cr = "\n\r"
     hSize = "size";
     hPaddingSize = "paddingSize"
 
-    def __init__(self):
+    def __init__(self, blockSize=None):
         self.size = 0
         self.paddingSize = 0
         self.completed = False
+        if blockSize:
+            self.numPaddingDigits = len(str(blockSize))
+        else:
+            self.numPaddingDigits = 1
 
     """
     Get the number of bytes that header takes up in packet
@@ -232,7 +230,12 @@ class Header(object):
     """
     def getBytes(self):
         header = "{}:{}{}".format(Header.hSize, self.size, Header.cr)
-        header += "{}:{}{}".format(Header.hPaddingSize, self.paddingSize, Header.cr)
+        padding = str(self.paddingSize)
+        paddingStr = str(self.paddingSize)
+        diff = self.numPaddingDigits - len(paddingStr)
+        if diff > 0:
+            paddingStr += diff * " "
+        header += "{}:{}{}".format(Header.hPaddingSize, paddingStr, Header.cr)
         header += Header.cr
         return header.encode()
 
@@ -248,4 +251,4 @@ class Header(object):
     def _extractHeaderValues(self, headerStr):
         headerStrMapArr = headerStr.split(Header.cr)
         self.size = int(headerStrMapArr[0].split(":")[1])
-        self.paddingSize = int(headerStrMapArr[1].split(":")[1])
+        self.paddingSize = int(headerStrMapArr[1].split(":")[1].strip())
