@@ -24,12 +24,7 @@ class KeyExchangeParameters:
         # Shared prime number and primitive root
         self.shared_prime  = self.parameters.parameter_numbers().p # Get the shared prime number
         self.shared_root   = self.parameters.parameter_numbers().g # Get the shared primitive root
-'''
-    # Get methods
-    parameters      = self.parameters
-    shared_prime    = self.shared_prime
-    shared_root     = self.shared_root 
-'''
+
 #------------------------------------------------------------------------------
 # Client Diffie-Hellman key exchange class:
 #
@@ -79,15 +74,7 @@ class ClientKeyExchange:
             info=b'handshake data',
             backend=default_backend()
         ).derive(self.shared_key)
-'''
-    # Get values
-    shared_prime        = self.shared_prime
-    shared_root         = self.shared_root
-    private_key_value   = self.private_key_value
-    public_key_value    = self.public_key_value
-    shared_key          = self.shared_key
-    derived_key         = self.derived_key
-'''
+
 #------------------------------------------------------------------------------
 # Server Diffie-Hellman key exchange class:
 #
@@ -137,15 +124,6 @@ class ServerKeyExchange:
             info=b'handshake data',
             backend=default_backend()
         ).derive(self.shared_key)
-'''
-    # Get values
-    shared_prime        = self.shared_prime
-    shared_root         = self.shared_root
-    private_key_value   = self.private_key_value
-    public_key_value    = self.public_key_value
-    shared_key          = self.shared_key
-    derived_key         = self.derived_key
-'''
 
 
         
