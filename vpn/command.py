@@ -8,6 +8,8 @@ from auth import Authenticator, AuthError
 from queue import Empty, Full
 from cryptography.exceptions import InvalidSignature
 
+import traceback
+
 NUM_CLIENTS = 1
 
 """
@@ -52,14 +54,15 @@ class ServerListenCommand(Command):
                 self.handleClient(conn)
         except:
             logger.info("Connection to client closed unexpectedly")
+            traceback.print_exc()
             self.sock.close()
 
     def handleClient(self, conn):
         try:
             conn = ConnectionWrapper(conn)
-            self.kex.exchangeKey(conn)
+            self.kex.exchangeKey(KeyExchanger.SERVER, conn)
             self.auth.authenticate(conn)
-            t = Thread(target=self.packetListener, args=(conn,))
+            t = Thread(target=packetListener, args=(conn,))
             t.start()
             while True:
                 try:
@@ -76,20 +79,6 @@ class ServerListenCommand(Command):
         finally:
             logger.info("Connection to client closed")
             conn.close()
-
-    def packetListener(self, conn):
-        while True:
-            try:
-                data = conn.recv()
-                if not data:
-                    break
-                logger.info("data: {}".format(data))
-                umsg = UMessage(UMessage.RECEIVE, data)
-                MQ.put_nowait(umsg)
-            except Full:
-                pass                
-            except InvalidSignature:
-                logger.info("Invalid signiture data is tampered with!")
 
 class ClientConnectCommand(Command):
     def __init__(self, host, port, sharedSecret):
@@ -111,9 +100,9 @@ class ClientConnectCommand(Command):
             logger.info("Client connected")
             conn = ConnectionWrapper(self.sock)
             # use connection from now on to talk
-            self.kex.exchangeKey(conn)
+            self.kex.exchangeKey(KeyExchanger.CLIENT, conn)
             self.auth.authenticate(conn)
-            t = Thread(target=self.packetListener, args=(conn,))
+            t = Thread(target=packetListener, args=(conn,))
             t.start()
             while True:
                 try:
@@ -131,17 +120,19 @@ class ClientConnectCommand(Command):
             logger.info("Connection to server closed")
             if conn:
                 conn.close()   
-        
-    def packetListener(self, conn):
-        while True:
-            try:
-                data = conn.recv()
-                if not data:
-                    break
-                logger.info("data: {}".format(data))
-                umsg = UMessage(UMessage.RECEIVE, data)
-                MQ.put_nowait(umsg)
-            except Full:
-                pass
-            except InvalidSignature:
-                logger.info("Invalid signiture data is tampered with!")
+
+
+def packetListener(conn):
+    while True:
+        try:
+            data = conn.recv()
+            if not data:
+                break
+            logger.info("data received: {}".format(data))
+            umsg = UMessage(UMessage.RECEIVE, data)
+            MQ.put_nowait(umsg)
+        except Full:
+            pass                
+        except InvalidSignature:
+            logger.info("Invalid signiture data is tampered with!")
+                

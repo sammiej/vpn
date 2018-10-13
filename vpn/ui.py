@@ -20,6 +20,7 @@ def run():
     mainframe.rowconfigure(0, weight=1)
 
     port = StringVar()
+    IP = StringVar()
     screen["port"] = port
     sharedSecret = StringVar()
     screen["sharedSecret"] = sharedSecret
@@ -28,11 +29,13 @@ def run():
     dataReceived = StringVar()
     screen["dataReceived"] = dataReceived
 
-    portEntry = ttk.Entry(mainframe, width=7, textvariable=port)    
+    portEntry = ttk.Entry(mainframe, width=7, textvariable=port)
+    IPEntry = ttk.Entry(mainframe, width=24, textvariable=IP)
     sharedSecretEntry = ttk.Entry(mainframe, width=7, textvariable=sharedSecret)
     dataToSendEntry = ttk.Entry(mainframe, width=7, textvariable=dataToSend)
     dataReceivedEntry = ttk.Entry(mainframe, width=7, textvariable=dataReceived)
 
+    IPEntry.grid(column=2, row=3, sticky=(W,E))
     portEntry.grid(column=2, row=2, sticky=(W, E))
     sharedSecretEntry.grid(column=2, row=4, sticky=(W, E))
     dataToSendEntry.grid(column=2, row=5, sticky=(W, E))
@@ -47,24 +50,21 @@ def run():
     scrollbar = Scrollbar(mainframe, orient="vertical")
     scrollbar.grid(column=2,row=7, sticky=(N, S))
 
-    listbox = Text(mainframe, borderwidth=3, width = 30, relief="sunken", yscrollcommand=scrollbar.set)
+    listbox = Text(mainframe, borderwidth=3, width = 30, height = 20, relief="sunken")
     screen["listbox"] = listbox
-    listbox.grid(column=2, row=7, sticky=(W, E))
-    # TODO: scrollbar NOT WORKING
-    scrollbar["command"] = listbox.yview
-    ttk.Button(mainframe, text="Continue").grid(column=3, row=7, sticky=W)
+    listbox.grid(column=1, row=7,columnspan=3,rowspan=2, sticky=(W, E))
+
+    ttk.Button(mainframe, text="Automatic").grid(column=4, row=7, sticky=W)
+    ttk.Button(mainframe, text="Continue").grid(column=4, row=8, sticky=W)
+
     scrollbar.config(command=listbox.yview)
 
-    listbox.config(yscrollcommand=scrollbar.set)
 
     # toggle views
     toggleVal = IntVar()
-    IP = StringVar()
     screen["ip"] = IP
-    IPEntry = ttk.Entry(mainframe, width=24, textvariable=IP)
-    IPEntry.grid(column=2, row=3)
     b = ttk.Button(mainframe)
-        
+
     def toggle():
         b.forget()
         IPEntry.delete(0, END)
@@ -79,7 +79,7 @@ def run():
 
     clientToggle = ttk.Radiobutton(mainframe, text="Client", variable=toggleVal, value=1, command=toggle)
     serverToggle = ttk.Radiobutton(mainframe, text="Server", variable=toggleVal, value=2, command=toggle)
-    
+
     clientToggle.grid(column=4, row=3, sticky=W)
     serverToggle.grid(column=5, row=3, sticky=W)
     clientToggle.invoke()
