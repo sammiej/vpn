@@ -10,8 +10,7 @@ class ConnectionWrapper(object):
     def __init__(self, conn):
         self.conn = conn
         self.hashSize = int(256 / 8)
-        #self.sessionKey = None
-        self.sessionKey = b'j\xefp\x8a=z/\x11"\x11+\x9dwj\x08*\xf3\xb6\x1b \x9f\xab\x11Y\x1c\xe3&\x9b\x0f\x8dG\t' # test value
+        self.sessionKey = None
         self.blockSize = int(128 / 8)
         
     def send(self, data):
@@ -186,10 +185,8 @@ class ConnectionWrapper(object):
         self.sessionKey = key
 
     def getKey(self):
-        # TODO: Change this to session key
-        return b'j\xefp\x8a=z/\x11"\x11+\x9dwj\x08*\xf3\xb6\x1b \x9f\xab\x11Y\x1c\xe3&\x9b\x0f\x8dG\t'        
-        #return self.sessionKey
-    
+        return self.sessionKey
+            
 class Header(object):
     cr = "\n\r"
     hSize = "size";
