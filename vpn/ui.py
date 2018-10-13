@@ -4,7 +4,7 @@
 from tkinter import *
 from tkinter import ttk
 import command as cmd
-from util import Message, UMessage, Q, MQ
+from util import Message, UMessage, Q, MQ, cont, toggle_auto
 from logger import logger
 from queue import Empty, Full
 
@@ -54,8 +54,8 @@ def run():
     screen["listbox"] = listbox
     listbox.grid(column=1, row=7,columnspan=3,rowspan=2, sticky=(W, E))
 
-    ttk.Button(mainframe, text="Automatic").grid(column=4, row=7, sticky=W)
-    ttk.Button(mainframe, text="Continue").grid(column=4, row=8, sticky=W)
+    ttk.Button(mainframe, text="Automatic", command=automaticClick).grid(column=4, row=7, sticky=W)
+    ttk.Button(mainframe, text="Continue", command=continueClick).grid(column=4, row=8, sticky=W)
 
     scrollbar.config(command=listbox.yview)
 
@@ -109,10 +109,14 @@ def run():
     lloop()
     root.mainloop()
 
-
 def continueClick():
-    # TODO: currently using shared secret as input and this click is used to listen as server
-    pass
+    cont()
+
+def automaticClick():
+    if toggle_auto():
+        logger.info("Communication process is now automatic")
+    else:
+        logger.info("Communication process is now manual")
 
 def sendClick():
     data = screen["dataToSend"].get()

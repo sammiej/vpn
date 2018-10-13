@@ -75,7 +75,7 @@ class ServerListenCommand(Command):
                 except Empty:
                     pass
         except AuthError as err:
-            logger.info(str(err))
+            logger.error(str(err))
         finally:
             logger.info("Connection to client closed")
             conn.close()
@@ -115,7 +115,7 @@ class ClientConnectCommand(Command):
                 except Empty:
                     pass
         except AuthError as err:
-            logger.info(str(err))
+            logger.error(str(err))
         finally:
             logger.info("Connection to server closed")
             if conn:
