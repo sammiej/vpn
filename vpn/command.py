@@ -1,10 +1,12 @@
 import socket
-import logging
+from logger import logger
 from threading import Thread
-from connection import ConnectionWrapper, Q, MQ, Message, UMessage
+from connection import ConnectionWrapper
+from util import Q, MQ, Message, UMessage
 from key import KeyExchanger
 from auth import Authenticator, AuthError
 from queue import Empty, Full
+from cryptography.exceptions import InvalidSignature
 
 NUM_CLIENTS = 1
 
@@ -19,38 +21,37 @@ class Command(object):
         raise NotImplementedError("Not Implemented!")
 
 class ServerListenCommand(Command):
-    def __init__(self):
+    def __init__(self, port, sharedSecret):
         self.host = "0.0.0.0"
-        self.port = 8888
+        self.port = port
         self.kex = KeyExchanger()
-        # TODO: get shared secret from input
-        self.auth = Authenticator(Authenticator.sharedSecret)
+        self.auth = Authenticator(sharedSecret)
 
     def execute(self):    
         self.sock = socket.socket()
-        logging.info("Server socket created")
+        logger.info("Server socket created")
         try:
             self.sock.bind((self.host, self.port))
-            logging.info("Server listening on port: {}".format(self.port))
+            logger.info("Server listening on port: {}".format(self.port))
         except socket.error as msg:
-            logging.error("Server socket bind failed")
+            logger.error("Server socket bind failed")
             self.sock.close()
             return
-        logging.info("Server socket bind complete")
+        logger.info("Server socket bind complete")
         t = Thread(target=self.listenThread)
         t.start()
 
     def listenThread(self):
-        logging.info("Listening for connection on separate thread")
+        logger.info("Listening for connection on separate thread")
         self.sock.listen(NUM_CLIENTS)
 
         try:
             while True:            
                 conn, addr = self.sock.accept()
-                logging.info("Connected with {} : {}".format(addr[0], addr[1]))
+                logger.info("Connected with {} : {}".format(addr[0], addr[1]))
                 self.handleClient(conn)
         except:
-            logging.info("Connection to client closed unexpectedly")
+            logger.info("Connection to client closed unexpectedly")
             self.sock.close()
 
     def handleClient(self, conn):
@@ -58,30 +59,48 @@ class ServerListenCommand(Command):
             conn = ConnectionWrapper(conn)
             self.kex.exchangeKey(conn)
             self.auth.authenticate(conn)
+            t = Thread(target=self.packetListener, args=(conn,))
+            t.start()
             while True:
-                # TODO: Change this
-                data = conn.recv(1024)
-                if not data:
-                    break
-                logging.info("obtained {}".format(data))
-                conn.send("received".encode())
+                try:
+                    msg = Q.get(timeout=0.2)
+                    if not msg:
+                        break
+                    if msg.mtype == Message.SEND:
+                        conn.send(msg.bytes)
+                        Q.task_done()
+                except Empty:
+                    pass
         except AuthError as err:
-            logging.info(str(err))
+            logger.info(str(err))
         finally:
-            logging.info("Connection to client closed")
+            logger.info("Connection to client closed")
             conn.close()
 
+    def packetListener(self, conn):
+        while True:
+            try:
+                data = conn.recv()
+                if not data:
+                    break
+                logger.info("data: {}".format(data))
+                umsg = UMessage(UMessage.RECEIVE, data)
+                MQ.put_nowait(umsg)
+            except Full:
+                pass                
+            except InvalidSignature:
+                logger.info("Invalid signiture data is tampered with!")
+
 class ClientConnectCommand(Command):
-    def __init__(self, host, port):
+    def __init__(self, host, port, sharedSecret):
         self.host = host
         self.port = port
         self.kex = KeyExchanger()
-        # TODO: get shared secret from input
-        self.auth = Authenticator(Authenticator.sharedSecret)
+        self.auth = Authenticator(sharedSecret)
         
     def execute(self):
         self.sock = socket.socket()
-        logging.info("Client socket created")
+        logger.info("Client socket created")
         t = Thread(target=self.connectThread)
         t.start()
 
@@ -89,39 +108,40 @@ class ClientConnectCommand(Command):
         conn = None
         try:
             self.sock.connect((self.host, self.port))
-            logging.info("Client connected")
+            logger.info("Client connected")
             conn = ConnectionWrapper(self.sock)
             # use connection from now on to talk
             self.kex.exchangeKey(conn)
             self.auth.authenticate(conn)
-            # From here on only use conn to send and recv messages
-            self.sock.settimeout(0.2)                                
+            t = Thread(target=self.packetListener, args=(conn,))
+            t.start()
             while True:
                 try:
                     msg = Q.get(timeout=0.2)
-                    if msg is None:
+                    if not msg:
                         break
                     if msg.mtype == Message.SEND:
                         conn.send(msg.bytes)
                     Q.task_done()
                 except Empty:
                     pass
-                try:
-                    data = conn.recv(1024)
-                    if not data:
-                        break
-                    logging.info("data: {}".format(data))
-                    umsg = UMessage(UMessage.DISPLAY, data.decode())
-                    MQ.put_nowait(umsg)
-                except socket.timeout:
-                    pass
-                except Full:
-                    logging.error("Main queue is full!")
         except AuthError as err:
-            logging.info(str(err))
+            logger.info(str(err))
         finally:
-            logging.info("Connection to server closed")
+            logger.info("Connection to server closed")
             if conn:
-                conn.close()        
+                conn.close()   
         
-        
+    def packetListener(self, conn):
+        while True:
+            try:
+                data = conn.recv()
+                if not data:
+                    break
+                logger.info("data: {}".format(data))
+                umsg = UMessage(UMessage.RECEIVE, data)
+                MQ.put_nowait(umsg)
+            except Full:
+                pass
+            except InvalidSignature:
+                logger.info("Invalid signiture data is tampered with!")
