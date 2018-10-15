@@ -1,1 +1,8 @@
-This is a readme file!
+- Requirements
+    - python 3 and above (tested on python 3.6.1)
+    - pip
+- To install
+  - run `pip install -r requirements.txt`
+- To run
+  - python main.py
+  
