@@ -50,7 +50,7 @@ def run():
     scrollbar = Scrollbar(mainframe, orient="vertical")
     scrollbar.grid(column=2,row=7, sticky=(N, S))
 
-    listbox = Text(mainframe, borderwidth=3, width = 30, height = 20, relief="sunken")
+    listbox = Text(mainframe, borderwidth=3, width=100, height=20, relief="sunken")
     screen["listbox"] = listbox
     listbox.grid(column=1, row=7,columnspan=3,rowspan=2, sticky=(W, E))
 

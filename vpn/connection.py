@@ -8,10 +8,10 @@ Decorator a connection object
 """
 class ConnectionWrapper(object):
     def __init__(self, conn):
-        self.conn = conn
-        self.hashSize = int(256 / 8)
-        self.sessionKey = None
-        self.blockSize = int(128 / 8)
+        self.conn = conn # immutable
+        self.hashSize = int(256 / 8) # immutable
+        self.sessionKey = None # should not change after initial setKey is called
+        self.blockSize = int(128 / 8) # immutable
         
     def send(self, data):
         header = Header(self.blockSize)

@@ -1,4 +1,5 @@
 - Requirements
+    - macOS (tested on macOS High Sierra 10.13.6)
     - python 3 and above (tested on python 3.6.1)
     - pip
 - To install
