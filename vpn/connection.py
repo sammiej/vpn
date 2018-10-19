@@ -3,6 +3,9 @@ from cryptography.hazmat.primitives import hashes, hmac
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 import os
 from logger import logger
+
+prefix = "Connection"
+
 """
 Decorator a connection object
 """
@@ -30,16 +33,30 @@ class ConnectionWrapper(object):
         logger.debug("data after padding: " + str(data))
         header.setPaddingSize(paddingSize)
         msg = header.getBytes() + data
+
+        logger.info("{}: sending following plain-text msg after padding: {}".format(prefix, msg))
+        
         iv = os.urandom(self.blockSize)
+
+        logger.info("{}: generated iv: {}".format(prefix, iv))
+        
         cipher = Cipher(algorithms.AES(self.sessionKey), modes.CBC(iv), backend=default_backend())
         encryptor = cipher.encryptor()
         ct = encryptor.update(msg) + encryptor.finalize()
+
+        logger.info("{}: cipher text: {}".format(prefix, ct))
         
         h = hmac.HMAC(self.sessionKey, hashes.SHA256(), backend=default_backend())
         h.update(ct)
         mac = h.finalize()
 
-        self.conn.send(iv + ct + mac)
+        logger.info("{}: calculated hmac from cipher text: {}".format(prefix, mac))
+
+        finalMsg = iv + ct + mac
+
+        logger.info("{}: final msg to be sent: {}".format(prefix, finalMsg))
+        
+        self.conn.send(finalMsg)
 
     """
     Apply insecure padding of all zeros
@@ -118,7 +135,9 @@ class ConnectionWrapper(object):
     def recv(self, asBytes=False):
         if self.sessionKey:
             iv = self._recvBytes(self.blockSize)
-            logger.debug("iv: {}".format(iv))
+
+            logger.info("{}: iv received: {}".format(prefix, iv))
+            
             cipher = Cipher(algorithms.AES(self.sessionKey), modes.CBC(iv), backend=default_backend())
             decryptor = cipher.decryptor()
 
@@ -151,11 +170,18 @@ class ConnectionWrapper(object):
             leftoverBodyEncrypted = self._recvBytes(leftoverBodySize)
             ct += leftoverBodyEncrypted
             body += decryptor.update(leftoverBodyEncrypted) + decryptor.finalize()
+
+            logger.info("{}: cipher text received: {}".format(prefix, ct))
             
             checkHmac = self._recvBytes(self.hashSize)
+
+            logger.info("{}: received cipher text hmac: {}".format(prefix, checkHmac))
+            
             h = hmac.HMAC(self.sessionKey, hashes.SHA256(), backend=default_backend())
             h.update(ct)
             h.verify(checkHmac)
+
+            logger.info("{}: complete received plain-text: {}".format(prefix, headerBytes + body))
 
             body = body[:len(body) - header.getPaddingSize()]
             if not asBytes:
@@ -195,7 +221,6 @@ class Header(object):
     def __init__(self, blockSize=None):
         self.size = 0
         self.paddingSize = 0
-        self.completed = False
         if blockSize:
             self.numPaddingDigits = len(str(blockSize))
         else:

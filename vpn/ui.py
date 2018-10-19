@@ -92,7 +92,7 @@ def run():
 
     def lloop():
         try:
-            umsg = MQ.get(timeout=0.05)
+            umsg = MQ.get(block=False)
             if umsg is None:
                 # TODO: quit application here?
                 pass
@@ -103,7 +103,7 @@ def run():
             MQ.task_done()
         except Empty:
             pass
-        root.after(200, lloop)
+        root.after(20, lloop)
 
     # Listen for events periodically
     lloop()
